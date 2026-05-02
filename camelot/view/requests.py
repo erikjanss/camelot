@@ -1,8 +1,10 @@
 from dataclasses import dataclass
-import orjson
 import logging
 import typing
 
+import orjson
+
+from ..admin.action.base import ModelContext
 from ..core.exception import CancelRequest, GuiException
 from ..core.naming import (
     CompositeName, NamingException, NameNotFoundException, initial_naming_context
@@ -25,23 +27,42 @@ class ModelRun(object):
 
 model_run_names = initial_naming_context.bind_new_context('model_run')
 
+
+class AbstractClientConnection(object):
+    """
+    Interface to access the connection to the end-client
+    """
+
+    def send_response(self, response):
+        """Send a response back to the client"""
+        raise NotImplementedError()
+
+    def has_cancel_request(self):
+        """Check if the client has sent a cancel request"""
+        raise NotImplementedError()
+    
+    def headers():
+        """Get the headers of the request that initiated the connection"""
+        raise NotImplementedError()
+
+
 class AbstractRequest(NamedDataclassSerializable):
     """
     Serialiazable Requests the UI can send to the model
     """
 
     @classmethod
-    def handle_request(cls, request, response_handler, cancel_handler):
+    def handle_request(cls, request, connection: AbstractClientConnection):
         request_type_name, request_data = orjson.loads(request)
         request_type = NamedDataclassSerializable.get_cls_by_name(
             request_type_name
         )
-        request_type.execute(request_data, response_handler, cancel_handler)
+        request_type.execute(request_data, connection)
 
     @classmethod
-    def execute(cls, request_data, response_handler, cancel_handler):
+    def execute(cls, request_data, connection: AbstractClientConnection):
         cls._iterate_until_blocking(
-            request_data, response_handler, cancel_handler
+            request_data, connection
         )
 
     @classmethod
@@ -49,14 +70,14 @@ class AbstractRequest(NamedDataclassSerializable):
         return None
 
     @classmethod
-    def _stop_action(cls, run_name, gui_run_name, response_handler, e):
+    def _stop_action(cls, run_name, gui_run_name, connection: AbstractClientConnection, e):
         from .action_steps import PopProgressLevel
         from .responses import ActionStopped, ActionStepped
-        response_handler.send_response(ActionStepped(
+        connection.send_response(ActionStepped(
             run_name=run_name, gui_run_name=gui_run_name, blocking=False,
             step=(PopProgressLevel.__name__, PopProgressLevel())
         ))
-        response_handler.send_response(ActionStopped(
+        connection.send_response(ActionStopped(
             run_name=run_name, gui_run_name=gui_run_name, exception=str(e)
         ))
         # As the unbind might fail, first send the ActionStopped response
@@ -65,10 +86,10 @@ class AbstractRequest(NamedDataclassSerializable):
             initial_naming_context.unbind(run_name)
 
     @classmethod
-    def _send_stop_message(cls, run_name, gui_run_name, response_handler, e):
+    def _send_stop_message(cls, run_name, gui_run_name, connection: AbstractClientConnection, e):
         from .responses import ActionStepped
         from .action_steps import MessageBox
-        response_handler.send_response(ActionStepped(
+        connection.send_response(ActionStepped(
             run_name=run_name, gui_run_name=gui_run_name, blocking=False,
             step=(MessageBox.__name__, MessageBox.from_exception(
                 LOGGER,
@@ -76,10 +97,10 @@ class AbstractRequest(NamedDataclassSerializable):
                 e
             ))
         ))
-        cls._stop_action(run_name, gui_run_name, response_handler, e)
+        cls._stop_action(run_name, gui_run_name, connection, e)
 
     @classmethod
-    def _iterate_until_blocking(cls, request_data, response_handler, cancel_handler):
+    def _iterate_until_blocking(cls, request_data, connection: AbstractClientConnection):
         """Helper calling for generator methods.  The decorated method iterates
         the generator until the generator yields an :class:`ActionStep` object that
         is blocking.  If a non blocking :class:`ActionStep` object is yielded, then
@@ -105,7 +126,7 @@ class AbstractRequest(NamedDataclassSerializable):
             while True:
                 if isinstance(result, ActionStep):
                     run.last_step = result
-                    response_handler.send_response(ActionStepped(
+                    connection.send_response(ActionStepped(
                         run_name=run_name, gui_run_name=gui_run_name,
                         step=(type(result).__name__, result),
                         blocking=result.blocking,
@@ -117,7 +138,7 @@ class AbstractRequest(NamedDataclassSerializable):
                 # Cancel requests can arrive asynchronously through non 
                 # blocking ActionSteps such as UpdateProgress
                 #
-                if cancel_handler.has_cancel_request():
+                if connection.has_cancel_request():
                     LOGGER.debug( 'asynchronous cancel, raise request' )
                     result = run.generator.throw(CancelRequest())
                 else:
@@ -128,13 +149,13 @@ class AbstractRequest(NamedDataclassSerializable):
             # a StopIteration, so there is no need to stop the action now.
             # However not doing so results in the progress popup not being
             # popped in certain cases (eg run forward all schedules -> cancel)
-            cls._stop_action(run_name, gui_run_name, response_handler, e)
+            cls._stop_action(run_name, gui_run_name, connection, e)
         except StopIteration as e:
-            cls._stop_action(run_name, gui_run_name, response_handler, e)
+            cls._stop_action(run_name, gui_run_name, connection, e)
         except Exception as e:
             LOGGER.error('Unhandled exception', exc_info=e)
             cls._send_stop_message(
-                ('constant', 'null'), gui_run_name, response_handler, e
+                ('constant', 'null'), gui_run_name, connection, e
             )
 
 @dataclass
@@ -155,7 +176,7 @@ class InitiateAction(AbstractRequest):
         return next(run.generator)
 
     @classmethod
-    def execute(cls, request_data, response_handler, cancel_handler):
+    def execute(cls, request_data, connection: AbstractClientConnection):
         from .action_steps import PushProgressLevel
         from .responses import ActionStopped, ActionStepped
         gui_run_name = tuple(request_data['gui_run_name'])
@@ -174,30 +195,33 @@ class InitiateAction(AbstractRequest):
                 LOGGER.error('Could not resolve action from gui_run {}, no binding for name: {}'.format(
                     gui_run_name, e.name
                 ))
-            response_handler.send_response(ActionStopped(
+            connection.send_response(ActionStopped(
                 run_name=('constant', 'null'), gui_run_name=gui_run_name, exception=None
             ))
             return
         generator, exception = None, None
+        if model_context is None:
+            model_context = ModelContext()
+            model_context.headers = connection.headers()
         try:
             generator = action.model_run(model_context, request_data.get('mode'))
         except Exception as exc:
             exception = str(exc)
         if generator is None:
-            response_handler.send_response(ActionStopped(
+            connection.send_response(ActionStopped(
                 run_name=('constant', 'null'), gui_run_name=gui_run_name, exception=exception
             ))
             return
         run = ModelRun(gui_run_name, generator, model_context)
         run_name = model_run_names.bind(str(id(run)), run)
-        response_handler.send_response(ActionStepped(
+        connection.send_response(ActionStepped(
             run_name=run_name, gui_run_name=gui_run_name, blocking=False,
             step=(PushProgressLevel.__name__, PushProgressLevel('Please wait'))
         ))
         request_data["run_name"] = run_name
         LOGGER.debug('Action {} runs in generator {}'.format(request_data['action_name'], run_name))
         cls._iterate_until_blocking(
-            request_data, response_handler, cancel_handler
+            request_data, connection
         )
 
 @dataclass
@@ -251,7 +275,7 @@ class StopProcess(AbstractRequest):
     """Sentinel task to end all tasks to be executed by a process"""
 
     @classmethod
-    def execute(cls, request_data, response_handler, cancel_handler):
+    def execute(cls, request_data, connection: AbstractClientConnection):
         raise SystemExit(0)
 
 
@@ -261,7 +285,7 @@ class Unbind(AbstractRequest):
     names: typing.List[CompositeName]
 
     @classmethod
-    def execute(cls, request_data, response_handler, cancel_handler):
+    def execute(cls, request_data, connection: AbstractClientConnection):
         for lease in request_data['names']:
             try:
                 initial_naming_context.unbind(tuple(lease))

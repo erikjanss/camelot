@@ -1,9 +1,10 @@
 import logging
 import orjson
 
+from starlette.datastructures import Headers
+
 from camelot.core.qt import QtCore
-from ..view.requests import AbstractRequest
-from .singleton import QSingleton
+from ..view.requests import AbstractRequest, AbstractClientConnection
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,13 +37,20 @@ def cpp_action_step(gui_context_name, name, step=QtCore.QByteArray()):
     return orjson.loads(response.data())
 
 
-class PythonConnection(QtCore.QObject, metaclass=QSingleton):
+class PythonConnection(QtCore.QObject, AbstractClientConnection):
     """Use python to connect to a server, this is done by using
     the PythonRootBackend, and listen for signals from the action runner
     and the dgc.  As any instance of this class listens to requests for the
     server, only one instance of this class should exist, to avoid sending
     multiple responses for the same request to the client.
     """
+
+    _instance = None
+
+    def __call__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
 
     def __init__(self):
         super().__init__()
@@ -54,10 +62,10 @@ class PythonConnection(QtCore.QObject, metaclass=QSingleton):
         backend.action_runner().onConnected()
 
     @classmethod
-    def _execute_serialized_request(cls, serialized_request, response_handler):
+    def _execute_serialized_request(cls, serialized_request, connection: AbstractClientConnection):
         try:
             AbstractRequest.handle_request(
-                serialized_request, response_handler, response_handler
+                serialized_request, connection
             )
         except Exception as e:
             LOGGER.error('Unhandled exception in model process', exc_info=e)
@@ -85,3 +93,6 @@ class PythonConnection(QtCore.QObject, metaclass=QSingleton):
 
     def has_cancel_request(self):
         return False
+    
+    def headers(self):
+        return Headers()
