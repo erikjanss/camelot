@@ -1,4 +1,6 @@
+from itertools import count
 import logging
+
 import orjson
 
 from starlette.datastructures import Headers
@@ -37,6 +39,8 @@ def cpp_action_step(gui_context_name, name, step=QtCore.QByteArray()):
     return orjson.loads(response.data())
 
 
+connection_counter = count()
+
 class PythonConnection(QtCore.QObject, AbstractClientConnection):
     """Use python to connect to a server, this is done by using
     the PythonRootBackend, and listen for signals from the action runner
@@ -45,14 +49,8 @@ class PythonConnection(QtCore.QObject, AbstractClientConnection):
     multiple responses for the same request to the client.
     """
 
-    _instance = None
-
-    def __call__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super().__call__(*args, **kwargs)
-        return cls._instances[cls]
-
     def __init__(self):
+        assert next(connection_counter) == 0, "Only one instance of PythonConnection should be created"
         super().__init__()
         backend = get_root_backend()
         dgc = backend.distributed_garbage_collector()

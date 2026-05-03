@@ -41,7 +41,7 @@ class AbstractClientConnection(object):
         """Check if the client has sent a cancel request"""
         raise NotImplementedError()
     
-    def headers():
+    def headers(self):
         """Get the headers of the request that initiated the connection"""
         raise NotImplementedError()
 
