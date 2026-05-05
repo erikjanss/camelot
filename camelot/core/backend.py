@@ -5,7 +5,7 @@ import orjson
 
 from starlette.datastructures import Headers
 
-from camelot.core.qt import QtCore
+from camelot.core.qt import QtCore, Qt
 from ..view.requests import AbstractRequest, AbstractClientConnection
 
 LOGGER = logging.getLogger(__name__)
@@ -55,7 +55,9 @@ class PythonConnection(QtCore.QObject, AbstractClientConnection):
         backend = get_root_backend()
         dgc = backend.distributed_garbage_collector()
         dgc.request.connect(self.on_request)
-        backend.action_runner().request.connect(self.on_request)
+        # queued, to allow the python code to store the returned gui_run of the action before
+        # the actual action step results are sent back
+        backend.action_runner().request.connect(self.on_request, Qt.ConnectionType.QueuedConnection)
         # would this start the main action ?? or only if one was bound ?
         backend.action_runner().onConnected()
 
