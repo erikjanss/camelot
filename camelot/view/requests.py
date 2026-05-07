@@ -83,7 +83,10 @@ class AbstractRequest(NamedDataclassSerializable):
         # As the unbind might fail, first send the ActionStopped response
         # so the client can let go of the run
         if run_name != ('constant', 'null'):
-            initial_naming_context.unbind(run_name)
+            try:
+                initial_naming_context.unbind(run_name)
+            except NameNotFoundException:
+                LOGGER.error('Request to unbind a non existing run name {}'.format(run_name))
 
     @classmethod
     def _send_stop_message(cls, run_name, gui_run_name, connection: AbstractClientConnection, e):
