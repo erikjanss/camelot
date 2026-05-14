@@ -52,12 +52,20 @@ class PythonConnection(QtCore.QObject, AbstractClientConnection):
     def __init__(self):
         assert next(connection_counter) == 0, "Only one instance of PythonConnection should be created"
         super().__init__()
-        backend = get_root_backend()
-        dgc = backend.distributed_garbage_collector()
-        dgc.request.connect(self.on_request)
+        self.backend = get_root_backend()
+        self.dgc = self.backend.distributed_garbage_collector()
+
+    def __enter__(self):
+        self.dgc.request.connect(self.on_request)
         # queued, to allow the python code to store the returned gui_run of the action before
         # the actual action step results are sent back
-        backend.action_runner().request.connect(self.on_request, Qt.ConnectionType.QueuedConnection)
+        self.backend.action_runner().request.connect(self.on_request, Qt.ConnectionType.QueuedConnection)
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # self.dgc.request.disconnect(self.on_request)
+        # self.backend.action_runner().request.disconnect(self.on_request)
+        return False
 
     @classmethod
     def _execute_serialized_request(cls, serialized_request, connection: AbstractClientConnection):
