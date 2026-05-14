@@ -58,8 +58,6 @@ class PythonConnection(QtCore.QObject, AbstractClientConnection):
         # queued, to allow the python code to store the returned gui_run of the action before
         # the actual action step results are sent back
         backend.action_runner().request.connect(self.on_request, Qt.ConnectionType.QueuedConnection)
-        # would this start the main action ?? or only if one was bound ?
-        backend.action_runner().onConnected()
 
     @classmethod
     def _execute_serialized_request(cls, serialized_request, connection: AbstractClientConnection):
