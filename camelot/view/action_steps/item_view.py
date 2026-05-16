@@ -180,21 +180,6 @@ class OpenTableView( UpdateTableView ):
         self.admin_route = admin.get_admin_route()
 
 
-@dataclass
-class OpenQmlTableView(OpenTableView):
-    """Open a new table view in the workspace.
-    
-    :param admin: an `camelot.admin.AbstractAdmin` instance
-    :param value: a list of objects or a query
-
-    .. attribute:: title
-        the title of the the new view
-
-    .. attribute:: new_tab
-        open the view in a new tab instead of the current tab
-        
-    """
-    pass
 
 
 @dataclass
