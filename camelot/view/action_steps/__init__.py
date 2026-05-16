@@ -39,7 +39,7 @@ from .gui import (
 )
 from .item_view import (
     Sort, OpenTableView, UpdateTableView, ClearSelection, SetSelection,
-    RefreshItemView, OpenQmlTableView, ToFirstRow, ToLastRow
+    RefreshItemView, ToFirstRow, ToLastRow
 )
 from .open_file import (OpenFile, ClientDirectoryInfo)
 from .orm import (
@@ -69,6 +69,7 @@ __all__ = [
     CreateObjects.__name__,
     CreateUpdateDelete.__name__,
     DeleteObjects.__name__,
+    OpenTableView.__name__,
     Exit.__name__,
     FlushSession.__name__,
     InstallTranslator.__name__,
@@ -80,8 +81,6 @@ __all__ = [
     OpenFile.__name__,
     OpenFormView.__name__,
     HighlightForm.__name__,
-    OpenTableView.__name__,
-    OpenQmlTableView.__name__,
     QmlChangeObjects.__name__,
     Refresh.__name__,
     RefreshItemView.__name__,
