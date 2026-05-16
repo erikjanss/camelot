@@ -17,6 +17,11 @@ class AbstractResponse(NamedDataclassSerializable):
 
 
 @dataclass
+class Connected(AbstractResponse):
+    pass
+
+
+@dataclass
 class Busy(AbstractResponse):
     busy: bool
 
