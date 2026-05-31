@@ -66,8 +66,9 @@ class PythonConnection(QtCore.QObject, AbstractClientConnection):
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # self.dgc.request.disconnect(self.on_request)
-        # self.backend.action_runner().request.disconnect(self.on_request)
+        self.backend.action_runner().waitForCompletion()
+        self.dgc.request.disconnect(self.on_request)
+        self.backend.action_runner().request.disconnect(self.on_request)
         return False
 
     @classmethod
