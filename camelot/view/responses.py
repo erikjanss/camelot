@@ -17,6 +17,17 @@ class AbstractResponse(NamedDataclassSerializable):
 
 
 @dataclass
+class Ready(AbstractResponse):
+    """
+    This indicates the server is ready to start executing actions.
+    This differs from the socket being connected, as it indicates
+    end-to-end readiness.  It also provides a hint to the client
+    for the name of the first action to run.
+    """
+    action_name: typing.Optional[CompositeName]
+
+
+@dataclass
 class Busy(AbstractResponse):
     busy: bool
 

@@ -69,6 +69,10 @@ class Authenticate(ActionStep, DataclassSerializable):
     Request client side credentials
     """
 
+    method: str
+    blocking: bool = True
+
+
 @dataclass
 class MainWindow(ActionStep, DataclassSerializable):
     """

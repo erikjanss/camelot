@@ -1,9 +1,14 @@
+from itertools import count
 import logging
+
 import orjson
 
-from camelot.core.qt import QtCore
-from ..view.requests import AbstractRequest
-from .singleton import QSingleton
+from starlette.datastructures import Headers
+
+from camelot.core.qt import QtCore, Qt
+
+from ..view.requests import AbstractRequest, AbstractClientConnection
+from ..view.responses import Ready
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,7 +41,9 @@ def cpp_action_step(gui_context_name, name, step=QtCore.QByteArray()):
     return orjson.loads(response.data())
 
 
-class PythonConnection(QtCore.QObject, metaclass=QSingleton):
+connection_counter = count()
+
+class PythonConnection(QtCore.QObject, AbstractClientConnection):
     """Use python to connect to a server, this is done by using
     the PythonRootBackend, and listen for signals from the action runner
     and the dgc.  As any instance of this class listens to requests for the
@@ -45,19 +52,32 @@ class PythonConnection(QtCore.QObject, metaclass=QSingleton):
     """
 
     def __init__(self):
+        assert next(connection_counter) == 0, "Only one instance of PythonConnection should be created"
         super().__init__()
-        backend = get_root_backend()
-        dgc = backend.distributed_garbage_collector()
-        dgc.request.connect(self.on_request)
-        backend.action_runner().request.connect(self.on_request)
-        # would this start the main action ?? or only if one was bound ?
-        backend.action_runner().onConnected()
+        self.backend = get_root_backend()
+        self.dgc = self.backend.distributed_garbage_collector()
+
+    def __enter__(self):
+        self.dgc.request.connect(self.on_request)
+        # queued, to allow the python code to store the returned gui_run of the action before
+        # the actual action step results are sent back
+        self.backend.action_runner().request.connect(self.on_request, Qt.ConnectionType.QueuedConnection)
+        # as this connection is used for testing, don't provide a hint for an action to start
+        # running, to keep the testing code in control of when actions start running
+        self.send_response(Ready(action_name=None))
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.backend.action_runner().waitForCompletion()
+        self.dgc.request.disconnect(self.on_request)
+        self.backend.action_runner().request.disconnect(self.on_request)
+        return False
 
     @classmethod
-    def _execute_serialized_request(cls, serialized_request, response_handler):
+    def _execute_serialized_request(cls, serialized_request, connection: AbstractClientConnection):
         try:
             AbstractRequest.handle_request(
-                serialized_request, response_handler, response_handler
+                serialized_request, connection
             )
         except Exception as e:
             LOGGER.error('Unhandled exception in model process', exc_info=e)
@@ -85,3 +105,6 @@ class PythonConnection(QtCore.QObject, metaclass=QSingleton):
 
     def has_cancel_request(self):
         return False
+    
+    def headers(self):
+        return Headers()

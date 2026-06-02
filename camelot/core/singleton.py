@@ -1,5 +1,3 @@
-from .qt import QtCore
-
 class Singleton(type):
     """
     Specialized metaclass that makes a class a 'true' singleton.
@@ -28,6 +26,3 @@ class Singleton(type):
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
-
-class QSingleton(type(QtCore.QObject), Singleton):
-    pass
