@@ -3,11 +3,9 @@ import logging
 
 import orjson
 
-from starlette.datastructures import Headers
-
 from camelot.core.qt import QtCore, Qt
 
-from ..view.requests import AbstractRequest, AbstractClientConnection
+from ..view.requests import AbstractClientConnection
 from ..view.responses import Ready
 
 LOGGER = logging.getLogger(__name__)
@@ -64,7 +62,7 @@ class PythonConnection(QtCore.QObject, AbstractClientConnection):
         self.backend.action_runner().request.connect(self.on_request, Qt.ConnectionType.QueuedConnection)
         # as this connection is used for testing, don't provide a hint for an action to start
         # running, to keep the testing code in control of when actions start running
-        self.send_response(Ready(action_name=None))
+        self.send_response(Ready(action_name=None, model_context=None))
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -72,22 +70,6 @@ class PythonConnection(QtCore.QObject, AbstractClientConnection):
         self.dgc.request.disconnect(self.on_request)
         self.backend.action_runner().request.disconnect(self.on_request)
         return False
-
-    @classmethod
-    def _execute_serialized_request(cls, serialized_request, connection: AbstractClientConnection):
-        try:
-            AbstractRequest.handle_request(
-                serialized_request, connection
-            )
-        except Exception as e:
-            LOGGER.error('Unhandled exception in model process', exc_info=e)
-            import traceback
-            traceback.print_exc()
-        except SystemExit:
-            LOGGER.debug('Terminating')
-            raise
-        except:
-            LOGGER.error('Unhandled event in model process')
 
     @QtCore.qt_slot(QtCore.QByteArray)
     def on_request(self, request):
@@ -105,6 +87,3 @@ class PythonConnection(QtCore.QObject, AbstractClientConnection):
 
     def has_cancel_request(self):
         return False
-    
-    def headers(self):
-        return Headers()

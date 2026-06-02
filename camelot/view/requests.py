@@ -4,7 +4,6 @@ import typing
 
 import orjson
 
-from ..admin.action.base import ModelContext
 from ..core.exception import CancelRequest, GuiException
 from ..core.naming import (
     CompositeName, NamingException, NameNotFoundException, initial_naming_context
@@ -40,10 +39,21 @@ class AbstractClientConnection(object):
     def has_cancel_request(self):
         """Check if the client has sent a cancel request"""
         raise NotImplementedError()
-    
-    def headers(self):
-        """Get the headers of the request that initiated the connection"""
-        raise NotImplementedError()
+
+    def _execute_serialized_request(self, serialized_request):
+        try:
+            AbstractRequest.handle_request(
+                serialized_request, self
+            )
+        except Exception as e:
+            LOGGER.error('Unhandled exception in model process', exc_info=e)
+            import traceback
+            traceback.print_exc()
+        except SystemExit:
+            LOGGER.debug('Terminating')
+            raise
+        except:
+            LOGGER.error('Unhandled event in model process')
 
 
 class AbstractRequest(NamedDataclassSerializable):
@@ -203,9 +213,6 @@ class InitiateAction(AbstractRequest):
             ))
             return
         generator, exception = None, None
-        if model_context is None:
-            model_context = ModelContext()
-            model_context.headers = connection.headers()
         try:
             generator = action.model_run(model_context, request_data.get('mode'))
         except Exception as exc:
