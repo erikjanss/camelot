@@ -8,7 +8,7 @@ from starlette.datastructures import Headers
 from camelot.core.qt import QtCore, Qt
 
 from ..view.requests import AbstractRequest, AbstractClientConnection
-from ..view.responses import Connected
+from ..view.responses import Ready
 
 LOGGER = logging.getLogger(__name__)
 
@@ -62,7 +62,9 @@ class PythonConnection(QtCore.QObject, AbstractClientConnection):
         # queued, to allow the python code to store the returned gui_run of the action before
         # the actual action step results are sent back
         self.backend.action_runner().request.connect(self.on_request, Qt.ConnectionType.QueuedConnection)
-        self.send_response(Connected())
+        # as this connection is used for testing, don't provide a hint for an action to start
+        # running, to keep the testing code in control of when actions start running
+        self.send_response(Ready(action_name=None))
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
