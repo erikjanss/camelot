@@ -73,7 +73,7 @@ class PythonConnection(QtCore.QObject, AbstractClientConnection):
 
     @QtCore.qt_slot(QtCore.QByteArray)
     def on_request(self, request):
-        self._execute_serialized_request(request.data(), self)
+        self._execute_serialized_request(request.data())
 
     @classmethod
     def send_response(cls, response):
