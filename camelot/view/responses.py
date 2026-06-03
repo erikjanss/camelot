@@ -25,6 +25,7 @@ class Ready(AbstractResponse):
     for the name of the first action to run.
     """
     action_name: typing.Optional[CompositeName]
+    model_context: typing.Optional[CompositeName]
 
 
 @dataclass
