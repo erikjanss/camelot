@@ -4,6 +4,7 @@ import functools
 import io
 import base64
 
+from pydantic import AnyUrl
 import orjson
 
 from camelot.core.qt import QtCore, QtGui
@@ -93,7 +94,7 @@ def orjson_default(obj):
     # subclasses should be handled explicitly here.
     if isinstance(obj, list):
         return [orjson_default(v) for v in obj]
-    if isinstance(obj, str):
+    if isinstance(obj, (str, AnyUrl)):
         return str(obj)
     raise TypeError
 
