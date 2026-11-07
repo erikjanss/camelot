@@ -51,8 +51,11 @@ class OpenFile( ActionStep, DataclassSerializable ):
     # TODO FIXME: Documentation needs to be updated
 
     url: AnyUrl
-
     blocking: bool = False
+
+    def get_path(self):
+        """For testing purposes"""
+        return self.url.path
 
     def __post_init__(self):
         assert isinstance(self.url, AnyUrl)
