@@ -2,6 +2,7 @@ import dataclasses
 import datetime
 import functools
 import io
+from pathlib import PurePosixPath
 import base64
 
 from pydantic import AnyUrl
@@ -96,6 +97,8 @@ def orjson_default(obj):
         return [orjson_default(v) for v in obj]
     if isinstance(obj, (str, AnyUrl)):
         return str(obj)
+    if isinstance(obj, PurePosixPath):
+        return obj.as_posix()
     raise TypeError
 
 
